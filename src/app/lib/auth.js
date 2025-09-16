@@ -1,33 +1,54 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import User from "../models/User";
+import dbConnect from "./dbConnect";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
-export const generateToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
-};
+// JWT Token functions
+export function signToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
 
-export const verifyToken = (token) => {
-  return jwt.verify(token, JWT_SECRET);
-};
-
-export const hashPassword = async (password) => {
-  return await bcrypt.hash(password, 12);
-};
-
-export const comparePassword = async (password, hashedPassword) => {
-  return await bcrypt.compare(password, hashedPassword);
-};
-
-export const authenticate = (req) => {
-  const authHeader = req.headers.get('authorization');
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Authentication token missing');
+export function verifyToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return null;
   }
-  
-  const token = authHeader.substring(7);
-  const decoded = verifyToken(token);
-  
-  return decoded.userId;
-};
+}
+
+// Password functions
+export async function hashPassword(password) {
+  return await bcrypt.hash(password, 10);
+}
+
+export async function comparePassword(password, hashedPassword) {
+  return await bcrypt.compare(password, hashedPassword);
+}
+
+// Authentication functions
+export async function getUserFromToken(req) {
+  await dbConnect();
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    return user || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+export function authenticate(request) {
+  const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new Error("Unauthorized");
+  }
+  const token = authHeader.split(" ")[1];
+  const payload = jwt.verify(token, JWT_SECRET);
+  return payload.userId;
+}
